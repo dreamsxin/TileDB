@@ -39,6 +39,7 @@ namespace test {
 
 std::vector<std::unique_ptr<SupportedFs>> vfs_test_get_fs_vec() {
   std::vector<std::unique_ptr<SupportedFs>> fs_vec;
+
   bool supports_s3_ = false;
   bool supports_hdfs_ = false;
   bool supports_azure_ = false;
@@ -48,14 +49,19 @@ std::vector<std::unique_ptr<SupportedFs>> vfs_test_get_fs_vec() {
     fs_vec.emplace_back(s3_fs);
   }
 
-  if (supports_hdfs_) {
+  if (supports_hdfs) {
     SupportedFsHDFS* hdfs_fs = new SupportedFsHDFS();
     fs_vec.emplace_back(hdfs_fs);
   }
 
-  if (supports_azure_) {
+  if (supports_azure) {
     SupportedFsAzure* azure_fs = new SupportedFsAzure();
     fs_vec.emplace_back(azure_fs);
+  }
+
+  if (supports_gcs) {
+    SupportedFsGCS* gcs_fs = new SupportedFsGCS();
+    fs_vec.emplace_back(gcs_fs);
   }
 
   SupportedFsLocal* local_fs = new SupportedFsLocal();
@@ -226,10 +232,10 @@ Status SupportedFsAzure::prepare_config(
 
 Status SupportedFsAzure::init(tiledb_ctx_t* ctx, tiledb_vfs_t* vfs) {
   int is_container = 0;
-  int rc = tiledb_vfs_is_bucket(ctx, vfs, container.c_str(), &is_container);
+  int rc = tiledb_vfs_is_bucket(ctx, vfs, container_.c_str(), &is_container);
   REQUIRE(rc == TILEDB_OK);
   if (!is_container) {
-    rc = tiledb_vfs_create_bucket(ctx, vfs, container.c_str());
+    rc = tiledb_vfs_create_bucket(ctx, vfs, container_.c_str());
     REQUIRE(rc == TILEDB_OK);
   }
 
@@ -238,16 +244,52 @@ Status SupportedFsAzure::init(tiledb_ctx_t* ctx, tiledb_vfs_t* vfs) {
 
 Status SupportedFsAzure::close(tiledb_ctx_t* ctx, tiledb_vfs_t* vfs) {
   int is_container = 0;
-  int rc = tiledb_vfs_is_bucket(ctx, vfs, container.c_str(), &is_container);
+  int rc = tiledb_vfs_is_bucket(ctx, vfs, container_.c_str(), &is_container);
   CHECK(rc == TILEDB_OK);
   if (is_container) {
-    CHECK(tiledb_vfs_remove_bucket(ctx, vfs, container.c_str()) == TILEDB_OK);
+    CHECK(tiledb_vfs_remove_bucket(ctx, vfs, container_.c_str()) == TILEDB_OK);
   }
 
   return Status::Ok();
 }
 
 std::string SupportedFsAzure::temp_dir() {
+  return temp_dir_;
+}
+
+Status SupportedFsGCS::prepare_config(
+    tiledb_config_t* config, tiledb_error_t* error) {
+  REQUIRE(
+      tiledb_config_set(config, "vfs.gcs.project_id", "TODO", &error) ==
+      TILEDB_OK);
+
+  return Status::Ok();
+}
+
+Status SupportedFsGCS::init(tiledb_ctx_t* ctx, tiledb_vfs_t* vfs) {
+  int is_bucket = 0;
+  int rc = tiledb_vfs_is_bucket(ctx, vfs, bucket_.c_str(), &is_bucket);
+  REQUIRE(rc == TILEDB_OK);
+  if (!is_bucket) {
+    rc = tiledb_vfs_create_bucket(ctx, vfs, bucket_.c_str());
+    REQUIRE(rc == TILEDB_OK);
+  }
+
+  return Status::Ok();
+}
+
+Status SupportedFsGCS::close(tiledb_ctx_t* ctx, tiledb_vfs_t* vfs) {
+  int is_bucket = 0;
+  int rc = tiledb_vfs_is_bucket(ctx, vfs, bucket_.c_str(), &is_bucket);
+  CHECK(rc == TILEDB_OK);
+  if (is_bucket) {
+    CHECK(tiledb_vfs_remove_bucket(ctx, vfs, bucket_.c_str()) == TILEDB_OK);
+  }
+
+  return Status::Ok();
+}
+
+std::string SupportedFsGCS::temp_dir() {
   return temp_dir_;
 }
 
